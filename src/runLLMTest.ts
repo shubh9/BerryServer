@@ -1,4 +1,4 @@
-import { runComputerUseAgent } from "./llmService.js";
+import { runComputerUseAgent } from "./operatorService.js";
 
 async function main() {
   const prompt =
