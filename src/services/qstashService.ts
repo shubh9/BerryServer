@@ -1,10 +1,14 @@
 import { Client, Receiver } from "@upstash/qstash";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 class QStashService {
   private client: Client;
   private receiver: Receiver;
 
   constructor() {
+    // Log all environment variable keys
     const token = process.env.QSTASH_TOKEN;
     const currentKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
     const nextKey = process.env.QSTASH_NEXT_SIGNING_KEY;
@@ -27,6 +31,12 @@ class QStashService {
    * Only supports values from 1 to 60.
    */
   async scheduleExecution(ruleId: string, frequencyMinutes: number) {
+    console.log(
+      "Scheduling execution for ruleId",
+      ruleId,
+      "with frequency",
+      frequencyMinutes
+    );
     const baseUrl = process.env.QSTASH_DESTINATION_BASE_URL;
     if (!baseUrl) {
       throw new Error(
