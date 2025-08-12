@@ -1,30 +1,31 @@
 import express from "express";
 import type { Request, Response } from "express";
+import { ruleRouter } from "./ruleRouter.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware to parse JSON bodies
-app.use(express.json());
+// Middleware to parse JSON bodies and preserve raw body for QStash signature verification
+app.use(
+  express.json({
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
 app.get("/", (_req: Request, res: Response) => {
   res.send("Hello world");
 });
 
-app.post("/rule", (req: Request, res: Response) => {
-  const { userId, textPrompt } = req.body;
-
-  console.log("POST /rule received:");
-  console.log("userId:", userId);
-  console.log("textPrompt:", textPrompt);
-
-  res.status(200).json({
-    message: "Rule data received successfully",
-    userId,
-    textPrompt,
-  });
+app.get("/notifications", (req: Request, res: Response) => {
+  res.send({ rule_id: "123", result: "Sf's gonna be a bit cloudy today :(" });
 });
 
+// Use the rule router for all /rules endpoints
+app.use("/rule", ruleRouter);
+
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  const url = `http://localhost:${PORT}`;
+  console.log(`Server listening at ${url}`);
 });

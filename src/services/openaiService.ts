@@ -18,9 +18,6 @@ export async function generate(prompt: string): Promise<string> {
       tools: [{ type: "web_search" }],
     } as any);
 
-    // The responses API returns the assistant's final text in `output_text` for models like "o3".
-    // Fall back to other possible locations just in case the shape changes.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const text =
       (response as any).output_text ?? (response as any).output?.[0]?.text;
     return text || "No response generated";

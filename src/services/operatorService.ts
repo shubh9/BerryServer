@@ -1,6 +1,5 @@
 import OpenAI from "openai";
 import dotenv from "dotenv";
-// @ts-ignore – Playwright types are included once the dependency is installed.
 import { chromium, Browser, Page } from "playwright";
 
 dotenv.config();

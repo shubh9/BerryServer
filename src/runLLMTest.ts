@@ -1,4 +1,4 @@
-import { runComputerUseAgent } from "./operatorService.js";
+import { runComputerUseAgent } from "./services/operatorService.js";
 
 async function main() {
   const prompt =
@@ -13,6 +13,4 @@ async function main() {
   }
 }
 
-// Execute if this file is run directly (e.g. `npm run test:llm`)
-// eslint-disable-next-line @typescript-eslint/no-floating-promises
 main();
