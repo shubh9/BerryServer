@@ -3,6 +3,10 @@ import dotenv from "dotenv";
 import { qstashService } from "./qstashService.js";
 import { notificationService } from "./notificationService.js";
 import { generate as openaiGenerate } from "./openaiService.js";
+import {
+  buildRuleGenerationPrompt,
+  buildRuleExecutionPrompt,
+} from "../prompts.js";
 
 // Load environment variables
 dotenv.config();
@@ -82,7 +86,7 @@ class RuleService {
         const responseText = await openaiGenerate(rule.prompt);
         console.log("[rule execution result]", {
           ruleId,
-          prompt: rule.prompt,
+          prompt: buildRuleExecutionPrompt(rule.prompt),
           response: responseText,
         });
 
@@ -111,16 +115,59 @@ class RuleService {
   }): Promise<{ status: number; body: any }> {
     try {
       const { body } = params;
-      const { userId, textPrompt, frequencyMinutes } = (body || {}) as {
+      const { userId, textPrompt } = body as {
         userId: string;
         textPrompt: string;
-        frequencyMinutes?: number;
       };
 
-      const minutes = body.frequencyMinutes ?? 1;
+      // Default cadence
+      let cadence: "per_minute" | "hourly" | "daily" | "weekly" = "per_minute";
 
-      // Create rule
-      const { data, error } = await this.createRule(userId, textPrompt);
+      // Use OpenAI to refine/build the final prompt from the user's idea
+      let finalPrompt = textPrompt;
+      try {
+        const generationInstruction = buildRuleGenerationPrompt(textPrompt);
+        const RuleGenSchema = {
+          type: "object",
+          properties: {
+            aiPrompt: { type: "string" },
+            frequency: {
+              type: "string",
+              enum: ["per_minute", "hourly", "daily", "weekly"],
+            },
+          },
+          required: ["aiPrompt", "frequency"],
+          additionalProperties: false,
+        };
+        const structured = await openaiGenerate(
+          generationInstruction,
+          RuleGenSchema
+        );
+        if (structured && structured.aiPrompt) {
+          finalPrompt = String(structured.aiPrompt).trim();
+        }
+        if (structured && structured.frequency) {
+          cadence = structured.frequency as typeof cadence;
+        }
+      } catch (err) {
+        console.warn(
+          "Prompt generation failed, falling back to user textPrompt:",
+          err
+        );
+      }
+
+      const ruleId = crypto.randomUUID();
+
+      // Schedule execution via QStash
+      const schedule = await qstashService.scheduleExecution(ruleId, cadence);
+      console.log("successfully scheduled execution", schedule);
+
+      // Create rule with the final prompt
+      const { data, error } = await this.createRule(
+        userId,
+        finalPrompt,
+        ruleId
+      );
       if (error || !data?.id) {
         console.error("Failed to create rule:", error);
         return {
@@ -132,13 +179,9 @@ class RuleService {
         };
       }
 
-      // Schedule execution via QStash
-      const schedule = await qstashService.scheduleExecution(data.id, minutes);
-      console.log("successfully scheduled execution", schedule);
-
       const scheduleId = (schedule as any)?.scheduleId ?? (schedule as any)?.id;
       if (scheduleId) {
-        await this.updateRuleCronId(data.id, scheduleId);
+        await this.updateRuleCronId(ruleId, scheduleId);
       }
 
       return {
@@ -148,8 +191,9 @@ class RuleService {
           rule: {
             ...data,
             cron_id: scheduleId,
-            frequency_minutes: minutes,
+            frequency: cadence,
           },
+          generatedPrompt: finalPrompt,
         },
       };
     } catch (error) {
@@ -184,13 +228,15 @@ class RuleService {
   /** Create a rule */
   async createRule(
     user_id: string,
-    prompt: string
+    prompt: string,
+    rule_id?: string
   ): Promise<{ data: Rule | null; error: any }> {
     try {
       const { data, error } = await this.supabase
         .from("berry_rules")
         .insert([
           {
+            id: rule_id,
             user_id,
             prompt,
           },
@@ -216,15 +262,36 @@ class RuleService {
     user_id: string
   ): Promise<{ data: Rule[] | null; error: any }> {
     try {
+      console.log("fetching user rules", user_id);
       const { data, error } = await this.supabase
         .from("berry_rules")
         .select("*")
         .eq("user_id", user_id)
         .order("created_at", { ascending: false });
 
+      console.log("fetched user rules", data);
       if (error) {
         console.error("Error fetching user rules:", error);
         return { data: null, error };
+      }
+
+      // Enrich rules with frequency information from QStash
+      if (data) {
+        const enrichedData = await Promise.all(
+          data.map(async (rule) => {
+            if (rule.cron_id) {
+              const schedule = await qstashService.getSchedule(rule.cron_id);
+              if (schedule?.cron) {
+                return {
+                  ...rule,
+                  frequency: qstashService.cronToFrequency(schedule.cron),
+                };
+              }
+            }
+            return { ...rule, frequency: null };
+          })
+        );
+        return { data: enrichedData, error: null };
       }
 
       return { data, error: null };

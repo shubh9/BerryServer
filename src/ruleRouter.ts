@@ -4,6 +4,28 @@ import { ruleService } from "./services/ruleService.js";
 
 const ruleRouter = express.Router();
 
+// GET /rule - Get all rules for a user
+ruleRouter.get("/", async (req: Request, res: Response) => {
+  const { userId } = req.query as { userId?: string };
+
+  if (!userId) {
+    return res.status(400).json({
+      error: "Missing required query parameter: userId",
+    });
+  }
+
+  const { data, error } = await ruleService.getUserRules(userId);
+
+  if (error) {
+    return res.status(500).json({
+      error: "Failed to fetch rules",
+      details: error.message || error,
+    });
+  }
+
+  return res.status(200).json(data || []);
+});
+
 // POST /rule - Create a new rule and schedule execution via QStash
 ruleRouter.post("/", async (req: Request, res: Response) => {
   const { userId, textPrompt } = req.body as {
