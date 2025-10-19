@@ -4,7 +4,7 @@ import { ruleRouter } from "./ruleRouter.js";
 import { notificationRouter } from "./notificationRouter.js";
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT;
 
 // Middleware to parse JSON bodies and preserve raw body for QStash signature verification
 app.use(

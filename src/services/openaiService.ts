@@ -16,7 +16,7 @@ export async function generate(prompt: string, schema?: any): Promise<any> {
     const jsonSchema = hasSchema ? schema : undefined;
 
     const request: any = {
-      model: "o3",
+      model: "gpt-5",
       input: prompt,
       tools: [{ type: "web_search" }],
     };
