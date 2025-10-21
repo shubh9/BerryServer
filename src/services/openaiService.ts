@@ -40,13 +40,7 @@ export async function generate(prompt: string, schema?: any): Promise<any> {
     if (!hasSchema) {
       return text || "No response generated";
     }
-
-    try {
-      return text ? JSON.parse(text) : {};
-    } catch {
-      // If parsing fails, just return raw text
-      return text || {};
-    }
+    return JSON.parse(text);
   } catch (error) {
     console.error("OpenAI API error:", error);
     throw new Error(`OpenAI API failed: ${error}`);

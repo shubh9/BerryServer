@@ -15,6 +15,11 @@ app.use(
   })
 );
 
+app.use((req: Request, _res: Response, next) => {
+  console.log(`${req.method} - ${req.url}`);
+  next();
+});
+
 app.get("/", (_req: Request, res: Response) => {
   res.send("Hello world");
 });

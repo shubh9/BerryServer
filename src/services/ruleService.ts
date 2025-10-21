@@ -50,59 +50,74 @@ class RuleService {
     try {
       const { rawBody, signature, body } = params;
 
+      // Verify signature if provided
       if (signature) {
-        if (!rawBody) {
-          return {
-            status: 400,
-            body: { error: "Missing raw body for signature verification" },
-          };
-        }
-        const ok = await qstashService.verifySignature(rawBody, signature);
+        const ok = await qstashService.verifySignature(rawBody!, signature);
         if (!ok) {
-          return { status: 401, body: { error: "Invalid QStash signature" } };
+          throw new Error("Invalid QStash signature");
         }
       }
 
+      // Parse payload
       const payload =
         rawBody && rawBody.length
           ? JSON.parse(rawBody.toString("utf8"))
           : body || {};
 
-      const { ruleId } = payload ?? {};
-      if (!ruleId) {
-        return { status: 400, body: { error: "Missing ruleId in payload" } };
-      }
+      const { ruleId } = payload;
 
+      // Get rule
       const { data: rule, error } = await this.getRuleById(ruleId);
-      if (error) {
-        console.error("Failed to fetch rule:", error);
-        return { status: 500, body: { error: "Failed to fetch rule" } };
-      }
-      if (!rule) {
-        return { status: 404, body: { error: "Rule not found" } };
+      if (error || !rule) {
+        throw new Error(error || "Rule not found");
       }
 
-      try {
-        const responseText = await openaiGenerate(rule.prompt);
-        console.log("[rule execution result]", {
-          ruleId,
-          prompt: buildRuleExecutionPrompt(rule.prompt),
-          response: responseText,
-        });
+      // Define schema for structured rule execution response
+      const RuleExecutionSchema = {
+        type: "object",
+        properties: {
+          content: {
+            type: "string",
+            description: "The result or output of the task execution",
+          },
+          foundRelevantResults: {
+            type: "boolean",
+            description:
+              "Whether the task yielded important or meaningful results",
+          },
+        },
+        required: ["content", "foundRelevantResults"],
+        additionalProperties: false,
+      };
 
-        // Store notification with top-level rule_id and payload { result: <text> }
+      // Execute rule with structured output
+      const executionResult = await openaiGenerate(
+        buildRuleExecutionPrompt(rule.prompt),
+        RuleExecutionSchema
+      );
+
+      console.log("[rule execution result]", {
+        ruleId,
+        prompt: buildRuleExecutionPrompt(rule.prompt),
+        response: executionResult,
+      });
+
+      // Only store notification if relevant results were found
+      if (executionResult.foundRelevantResults) {
         await notificationService.createNotification(rule.user_id, ruleId, {
-          result: responseText,
+          result: executionResult.content,
         });
-      } catch (err) {
-        console.error("OpenAI generation failed:", err);
-        return { status: 502, body: { error: "OpenAI generation failed" } };
       }
 
       return { status: 200, body: { ok: true } };
     } catch (e) {
       console.error("Error handling /rule/execute:", e);
-      return { status: 500, body: { error: "Internal server error" } };
+      return {
+        status: 500,
+        body: {
+          error: e instanceof Error ? e.message : "Internal server error",
+        },
+      };
     }
   }
 
@@ -262,14 +277,14 @@ class RuleService {
     user_id: string
   ): Promise<{ data: Rule[] | null; error: any }> {
     try {
-      console.log("fetching user rules", user_id);
       const { data, error } = await this.supabase
         .from("berry_rules")
         .select("*")
         .eq("user_id", user_id)
         .order("created_at", { ascending: false });
 
-      console.log("fetched user rules", data);
+      console.log(`Fetched ${data?.length} user rules`);
+
       if (error) {
         console.error("Error fetching user rules:", error);
         return { data: null, error };

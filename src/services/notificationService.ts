@@ -66,7 +66,7 @@ class NotificationService {
         .select("*")
         .order("created_at", { ascending: false });
 
-      console.log("Fetched notifications:", data);
+      console.log(`Fetched ${data?.length} notifications`);
 
       if (error) {
         console.error("Error fetching notifications:", error);
