@@ -316,9 +316,27 @@ class RuleService {
     }
   }
 
-  /** Delete a rule by ID */
+  /** Delete a rule by ID and its associated QStash schedule */
   async deleteRule(rule_id: string): Promise<{ success: boolean; error: any }> {
     try {
+      // First, fetch the rule to get the cron_id
+      const { data: rule, error: fetchError } = await this.getRuleById(rule_id);
+      if (fetchError) {
+        console.error("Error fetching rule for deletion:", fetchError);
+        return { success: false, error: fetchError };
+      }
+
+      // Delete the QStash schedule if it exists
+      if (rule?.cron_id) {
+        const { success: qstashSuccess, error: qstashError } =
+          await qstashService.deleteSchedule(rule.cron_id);
+        if (!qstashSuccess) {
+          console.warn("Failed to delete QStash schedule:", qstashError);
+          // Continue with Supabase deletion even if QStash fails
+        }
+      }
+
+      // Delete from Supabase
       const { error } = await this.supabase
         .from("berry_rules")
         .delete()

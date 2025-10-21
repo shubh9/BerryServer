@@ -58,4 +58,29 @@ ruleRouter.post("/execute", async (req: Request, res: Response) => {
   return res.status(result.status).json(result.body);
 });
 
+// DELETE /rule/:ruleId - Delete a rule and its QStash schedule
+ruleRouter.delete("/:ruleId", async (req: Request, res: Response) => {
+  const { ruleId } = req.params;
+
+  if (!ruleId) {
+    return res.status(400).json({
+      error: "Missing required parameter: ruleId",
+    });
+  }
+
+  const { success, error } = await ruleService.deleteRule(ruleId);
+
+  if (!success) {
+    return res.status(500).json({
+      error: "Failed to delete rule",
+      details: error?.message || error,
+    });
+  }
+
+  return res.status(200).json({
+    message: "Rule deleted successfully",
+    ruleId,
+  });
+});
+
 export { ruleRouter };

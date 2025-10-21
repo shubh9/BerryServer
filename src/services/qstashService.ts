@@ -107,6 +107,21 @@ class QStashService {
   }
 
   /**
+   * Delete a schedule by schedule ID
+   */
+  async deleteSchedule(
+    scheduleId: string
+  ): Promise<{ success: boolean; error: any }> {
+    try {
+      await this.client.schedules.delete(scheduleId);
+      return { success: true, error: null };
+    } catch (error) {
+      console.error("Error deleting schedule:", error);
+      return { success: false, error };
+    }
+  }
+
+  /**
    * Convert cron expression to human-readable frequency
    */
   cronToFrequency(cron: string): string {
