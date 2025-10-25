@@ -14,7 +14,7 @@ ruleRouter.get("/", async (req: Request, res: Response) => {
     });
   }
 
-  const { data, error } = await ruleService.getUserRules(userId);
+  const { data, error } = await ruleService.getAllUserRules(userId);
 
   if (error) {
     return res.status(500).json({
@@ -58,6 +58,23 @@ ruleRouter.post("/execute", async (req: Request, res: Response) => {
   return res.status(result.status).json(result.body);
 });
 
+// POST /rule/:ruleId/execute - Execute a rule immediately
+ruleRouter.post("/:ruleId/execute", async (req: Request, res: Response) => {
+  const { ruleId } = req.params;
+
+  if (!ruleId) {
+    return res.status(400).json({
+      error: "Missing required parameter: ruleId",
+    });
+  }
+
+  const result = await ruleService.handleExecute({
+    body: { ruleId },
+  });
+
+  return res.status(result.status).json(result.body);
+});
+
 // DELETE /rule/:ruleId - Delete a rule and its QStash schedule
 ruleRouter.delete("/:ruleId", async (req: Request, res: Response) => {
   const { ruleId } = req.params;
@@ -68,7 +85,7 @@ ruleRouter.delete("/:ruleId", async (req: Request, res: Response) => {
     });
   }
 
-  const { success, error } = await ruleService.deleteRule(ruleId);
+  const { success, error } = await ruleService.deleteUserRule(ruleId);
 
   if (!success) {
     return res.status(500).json({

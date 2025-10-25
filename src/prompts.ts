@@ -31,10 +31,36 @@ Return a bullet point list with a short overview of each valid listing and the f
 User request: ${userRequest}`;
 }
 
-export function buildRuleExecutionPrompt(rulePrompt: string): string {
+export function buildRuleExecutionPrompt(
+  rulePrompt: string,
+  history?: Array<{ content: string; timestamp: string }>
+): string {
+  // Get last 3 history items (content only)
+  const recentHistory =
+    history && history.length > 0
+      ? history.slice(-3).map((item) => item.content)
+      : [];
+
+  let historySection = "";
+  if (recentHistory.length > 0) {
+    historySection = `
+______________________________________________________________________________
+Previous Results (DO NOT REPEAT):
+The following are the last ${
+      recentHistory.length
+    } result(s) from previous executions of this task. 
+Your new response should NOT repeat or duplicate information already covered in these previous results:
+
+${recentHistory.map((content, idx) => `${idx + 1}. ${content}`).join("\n\n")}
+END OF PREVIOUS RESULTS
+______________________________________________________________________________
+`;
+  }
+
   return `Your job is to execute the following task and provide a concise answer.
 
   Task: ${rulePrompt}
+${historySection}
 ______________________________________________________________________________
   Guidelines:
 - Provide a casual, simple, and to-the-point response in the content field
@@ -42,6 +68,11 @@ ______________________________________________________________________________
 - If the task completes but doesn't find anything important or actionable (e.g., no new updates, no matching results, nothing noteworthy), still include what you found in content but mark it as not relevant
 - Your output will be read directly by the user, so keep it conversational
 - Do not output code, scripts, or technical artifacts unless specifically requested
+${
+  recentHistory.length > 0
+    ? "- IMPORTANT: Do not repeat information that was already provided in the previous results shown above"
+    : ""
+}
 
 Return 
 Content: Your answer to the task, conscise and to the point. Include this even if foundRelevantResults is false.

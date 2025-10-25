@@ -1,4 +1,3 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import { qstashService } from "./qstashService.js";
 import { notificationService } from "./notificationService.js";
@@ -7,36 +6,23 @@ import {
   buildRuleGenerationPrompt,
   buildRuleExecutionPrompt,
 } from "../prompts.js";
+import {
+  Rule,
+  getRuleById,
+  createRule,
+  getUserRules,
+  deleteRule,
+  updateRuleCronId,
+  updateRuleHistory,
+} from "../db/rule.js";
 
 // Load environment variables
 dotenv.config();
 
-// Define the Rule type for better type safety
-export interface Rule {
-  id?: string;
-  user_id: string;
-  prompt: string;
-  created_at?: string;
-  updated_at?: string;
-  cron_id?: string;
-}
+// Re-export Rule type for backwards compatibility
+export type { Rule };
 
 class RuleService {
-  private supabase: SupabaseClient;
-
-  constructor() {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
-      throw new Error(
-        "Missing required environment variables: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
-      );
-    }
-
-    this.supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-  }
-
   /**
    * Handle the /rule/execute behavior: verify signature (if present), parse payload,
    * fetch the rule, and run the OpenAI generation.
@@ -67,7 +53,7 @@ class RuleService {
       const { ruleId } = payload;
 
       // Get rule
-      const { data: rule, error } = await this.getRuleById(ruleId);
+      const { data: rule, error } = await getRuleById(ruleId);
       if (error || !rule) {
         throw new Error(error || "Rule not found");
       }
@@ -90,15 +76,15 @@ class RuleService {
         additionalProperties: false,
       };
 
+      const prompt = buildRuleExecutionPrompt(rule.prompt, rule.history);
+
+      console.log("[rule execution prompt]", prompt);
+
       // Execute rule with structured output
-      const executionResult = await openaiGenerate(
-        buildRuleExecutionPrompt(rule.prompt),
-        RuleExecutionSchema
-      );
+      const executionResult = await openaiGenerate(prompt, RuleExecutionSchema);
 
       console.log("[rule execution result]", {
         ruleId,
-        prompt: buildRuleExecutionPrompt(rule.prompt),
         response: executionResult,
       });
 
@@ -107,6 +93,15 @@ class RuleService {
         await notificationService.createNotification(rule.user_id, ruleId, {
           result: executionResult.content,
         });
+
+        // Update rule history with the result content
+        const currentHistory = rule.history || [];
+        const newEntry = {
+          content: executionResult.content,
+          timestamp: new Date().toISOString(),
+        };
+        const updatedHistory = [...currentHistory, newEntry];
+        await updateRuleHistory(ruleId, updatedHistory);
       }
 
       return { status: 200, body: { ok: true } };
@@ -178,11 +173,7 @@ class RuleService {
       console.log("successfully scheduled execution", schedule);
 
       // Create rule with the final prompt
-      const { data, error } = await this.createRule(
-        userId,
-        finalPrompt,
-        ruleId
-      );
+      const { data, error } = await createRule(userId, finalPrompt, ruleId);
       if (error || !data?.id) {
         console.error("Failed to create rule:", error);
         return {
@@ -196,7 +187,7 @@ class RuleService {
 
       const scheduleId = (schedule as any)?.scheduleId ?? (schedule as any)?.id;
       if (scheduleId) {
-        await this.updateRuleCronId(ruleId, scheduleId);
+        await updateRuleCronId(ruleId, scheduleId);
       }
 
       return {
@@ -217,76 +208,15 @@ class RuleService {
     }
   }
 
-  /** Get a single rule by ID */
-  async getRuleById(
-    rule_id: string | number
-  ): Promise<{ data: Rule | null; error: any }> {
-    try {
-      const { data, error } = await this.supabase
-        .from("berry_rules")
-        .select("*")
-        .eq("id", rule_id as any)
-        .single();
-
-      if (error) {
-        console.error("Error fetching rule by id:", error);
-        return { data: null, error };
-      }
-
-      return { data, error: null };
-    } catch (error) {
-      console.error("Unexpected error fetching rule by id:", error);
-      return { data: null, error };
-    }
-  }
-
-  /** Create a rule */
-  async createRule(
-    user_id: string,
-    prompt: string,
-    rule_id?: string
-  ): Promise<{ data: Rule | null; error: any }> {
-    try {
-      const { data, error } = await this.supabase
-        .from("berry_rules")
-        .insert([
-          {
-            id: rule_id,
-            user_id,
-            prompt,
-          },
-        ])
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Error creating rule:", error);
-        return { data: null, error };
-      }
-
-      console.log("Rule created successfully:", data);
-      return { data, error: null };
-    } catch (error) {
-      console.error("Unexpected error creating rule:", error);
-      return { data: null, error };
-    }
-  }
-
-  /** Get all rules for a user */
-  async getUserRules(
+  /** Get all rules for a user with frequency enrichment */
+  async getAllUserRules(
     user_id: string
   ): Promise<{ data: Rule[] | null; error: any }> {
     try {
-      const { data, error } = await this.supabase
-        .from("berry_rules")
-        .select("*")
-        .eq("user_id", user_id)
-        .order("created_at", { ascending: false });
-
-      console.log(`Fetched ${data?.length} user rules`);
+      // Get rules from database
+      const { data, error } = await getUserRules(user_id);
 
       if (error) {
-        console.error("Error fetching user rules:", error);
         return { data: null, error };
       }
 
@@ -317,10 +247,12 @@ class RuleService {
   }
 
   /** Delete a rule by ID and its associated QStash schedule */
-  async deleteRule(rule_id: string): Promise<{ success: boolean; error: any }> {
+  async deleteUserRule(
+    rule_id: string
+  ): Promise<{ success: boolean; error: any }> {
     try {
       // First, fetch the rule to get the cron_id
-      const { data: rule, error: fetchError } = await this.getRuleById(rule_id);
+      const { data: rule, error: fetchError } = await getRuleById(rule_id);
       if (fetchError) {
         console.error("Error fetching rule for deletion:", fetchError);
         return { success: false, error: fetchError };
@@ -332,47 +264,15 @@ class RuleService {
           await qstashService.deleteSchedule(rule.cron_id);
         if (!qstashSuccess) {
           console.warn("Failed to delete QStash schedule:", qstashError);
-          // Continue with Supabase deletion even if QStash fails
+          // Continue with database deletion even if QStash fails
         }
       }
 
-      // Delete from Supabase
-      const { error } = await this.supabase
-        .from("berry_rules")
-        .delete()
-        .eq("id", rule_id);
-
-      if (error) {
-        console.error("Error deleting rule:", error);
-        return { success: false, error };
-      }
-
-      console.log("Rule deleted successfully");
-      return { success: true, error: null };
+      // Delete from database
+      return await deleteRule(rule_id);
     } catch (error) {
       console.error("Unexpected error deleting rule:", error);
       return { success: false, error };
-    }
-  }
-
-  /** Update a rule's cron_id */
-  async updateRuleCronId(rule_id: string, cron_id: string) {
-    try {
-      const { data, error } = await this.supabase
-        .from("berry_rules")
-        .update({ cron_id })
-        .eq("id", rule_id)
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Error updating rule cron_id:", error);
-        return { data: null, error };
-      }
-      return { data, error: null };
-    } catch (error) {
-      console.error("Unexpected error updating rule cron_id:", error);
-      return { data: null, error };
     }
   }
 }
