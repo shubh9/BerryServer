@@ -1,20 +1,20 @@
 import dotenv from "dotenv";
-import { qstashService } from "./qstashService.js";
-import { notificationService } from "./notificationService.js";
-import { generate as openaiGenerate } from "./openaiService.js";
 import {
-  buildRuleGenerationPrompt,
-  buildRuleExecutionPrompt,
-} from "../prompts.js";
-import {
-  Rule,
-  getRuleById,
   createRule,
-  getUserRules,
   deleteRule,
+  getRuleById,
+  getUserRules,
+  type Rule,
   updateRuleCronId,
   updateRuleHistory,
 } from "../db/rule.js";
+import {
+  buildRuleExecutionPrompt,
+  buildRuleGenerationPrompt,
+} from "../prompts.js";
+import { notificationService } from "./notificationService.js";
+import { generate as openaiGenerate } from "./openaiService.js";
+import { qstashService } from "./qstashService.js";
 
 // Load environment variables
 dotenv.config();
