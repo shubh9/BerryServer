@@ -12,21 +12,22 @@ dotenv.config();
  * prompt users want the model to run on schedule.
  */
 export function buildRuleGenerationPrompt(userRequest: string): string {
-  return `You are a helpful assistant that writes precise prompts for an autonomous periodic agent.
-Given the user's rough idea, produce ONE clear, actionable prompt that:
-- Is self-contained (no placeholders).
-- Avoids unnecessary verbosity.
-- Is safe and appropriate for automated periodic execution.
-- Uses up-to-date, neutral phrasing.
-- The prompt should be a task that can be completed by the agent itself, possibly using the browser to search the web and returns text as a result. Do not have the task be to write a script or code or json or anything.
-Output ONLY the final prompt text, with no preamble or explanation.
+  return `You are a concise assistant that writes clear, actionable prompts for an autonomous periodic agent.
+Given the user's request, produce ONE short, self-contained prompt that:
+- Avoids invented details or arbitrary numbers.
+- Uses natural limits (e.g., “up to 10 new items” instead of fixed counts).
+- Is appropriate for automated, repeatable execution.
+- Describes a concrete task the agent can complete on its own (e.g., using a browser or web search).
+- Omits any instructions to write code, JSON, or meta explanations.
+- When the task involves collecting or comparing items (like listings, jobs, products), ask for results in a concise **table** format - MAX 5 columns.
+- Otherwise, request a short text summary or bullet list as appropriate.
 
+Output ONLY the final prompt text, with no preamble or commentary.
 
-For example if the user request is:
-"check fb marketplace for a 5 seater couch less than $500" 
-The output should be:
-"Check Facebook Marketplace in San Francisco for 5-seater couches recently listed and are $500 or less that are 5 seater. 
-Return a bullet point list with a short overview of each valid listing and the facebook link to the listing."
+Example:
+If the user request is "check fb marketplace for a 5 seater couch less than $500"
+→ Output:
+"Check Facebook Marketplace in San Francisco for recently listed 5-seater couches priced at $500 or less. Return returns in a table format with the title, price, and link to each valid listing."
 
 User request: ${userRequest}`;
 }
@@ -64,10 +65,16 @@ ${historySection}
 ______________________________________________________________________________
   Guidelines:
 - Provide a casual, simple, and to-the-point response in the content field
+- Format your response using Markdown for better readability:
+  • Use **bold** for important information
+  • Use bullet points (-) or numbered lists for multiple items
+  • Use [link text](url) for clickable URLs
+  • Use ## or ### for section headers if organizing longer content
+  • Keep it clean and easy to scan
 - If the task successfully finds meaningful or important information, mark it as relevant
 - If the task completes but doesn't find anything important or actionable (e.g., no new updates, no matching results, nothing noteworthy), still include what you found in content but mark it as not relevant
 - Your output will be read directly by the user, so keep it conversational
-- Do not output code, scripts, or technical artifacts unless specifically requested
+- Do not output code blocks, scripts, or technical artifacts
 ${
   recentHistory.length > 0
     ? "- IMPORTANT: Do not repeat information that was already provided in the previous results shown above"
@@ -75,7 +82,7 @@ ${
 }
 
 Return 
-Content: Your answer to the task, conscise and to the point. Include this even if foundRelevantResults is false.
+Content: Your answer to the task in Markdown format, concise and to the point. Include this even if foundRelevantResults is false.
 foundRelevantResults: Whether the task yielded important or meaningful results
 
 `;
