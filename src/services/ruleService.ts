@@ -190,6 +190,10 @@ class RuleService {
         await updateRuleCronId(ruleId, scheduleId);
       }
 
+      qstashService.triggerImmediateExecution(ruleId).catch((err) => {
+        console.error("Failed to trigger immediate execution:", err);
+      });
+
       return {
         status: 201,
         body: {

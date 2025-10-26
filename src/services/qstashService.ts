@@ -122,6 +122,29 @@ class QStashService {
   }
 
   /**
+   * Trigger an immediate one-time execution of a rule (non-blocking)
+   */
+  async triggerImmediateExecution(ruleId: string) {
+    console.log("Triggering immediate execution for ruleId", ruleId);
+    const baseUrl = process.env.QSTASH_DESTINATION_BASE_URL;
+    if (!baseUrl) {
+      throw new Error(
+        "Missing QSTASH_DESTINATION_BASE_URL for QStash destination"
+      );
+    }
+    const destination = `${baseUrl}/rule/execute`;
+
+    // Publish a one-time message (not a schedule)
+    const result = await this.client.publishJSON({
+      url: destination,
+      body: { ruleId },
+      retries: 3,
+    });
+
+    return result;
+  }
+
+  /**
    * Convert cron expression to human-readable frequency
    */
   cronToFrequency(cron: string): string {
