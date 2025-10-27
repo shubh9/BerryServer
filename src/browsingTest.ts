@@ -1,6 +1,6 @@
-import * as openaiService from "./openaiService";
-import * as perplexityService from "./perplexityService";
-import readline from "readline";
+import readline from "node:readline";
+import * as openaiService from "./services/openaiService.js";
+import * as perplexityService from "./services/perplexityService.js";
 
 async function runBrowsingTest() {
   await new Promise((resolve) => setTimeout(resolve, 500));

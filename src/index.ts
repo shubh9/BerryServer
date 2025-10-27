@@ -27,7 +27,11 @@ app.get("/", (_req: Request, res: Response) => {
 app.use("/auth", authRouter);
 app.use("/notifications", notificationRouter);
 app.use("/rule", ruleRouter);
-app.listen(PORT, () => {
-  const url = `http://localhost:${PORT}`;
-  console.log(`Server listening at ${url}`);
-});
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => {
+    const url = `http://localhost:${PORT}`;
+    console.log(`Server listening at ${url}`);
+  });
+}
+
+export default app;
