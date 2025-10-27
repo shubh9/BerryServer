@@ -54,9 +54,9 @@ class NotificationService {
   }
 
   /**
-   * Fetch all notifications, newest first.
+   * Fetch notifications for a specific user, newest first.
    */
-  async getAllNotifications(): Promise<{
+  async getNotificationsByUserId(userId: string): Promise<{
     data: NotificationRecord[] | null;
     error: any;
   }> {
@@ -64,9 +64,10 @@ class NotificationService {
       const { data, error } = await this.supabase
         .from("berry_notifications")
         .select("*")
+        .eq("user_id", userId)
         .order("created_at", { ascending: false });
 
-      console.log(`Fetched ${data?.length} notifications`);
+      console.log(`Fetched ${data?.length} notifications for user ${userId}`);
 
       if (error) {
         console.error("Error fetching notifications:", error);

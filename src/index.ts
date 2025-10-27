@@ -2,6 +2,7 @@ import express from "express";
 import type { Request, Response } from "express";
 import { ruleRouter } from "./ruleRouter.js";
 import { notificationRouter } from "./notificationRouter.js";
+import { authRouter } from "./authRouter.js";
 
 const app = express();
 const PORT = process.env.PORT;
@@ -23,6 +24,7 @@ app.use((req: Request, _res: Response, next) => {
 app.get("/", (_req: Request, res: Response) => {
   res.send("Hello world");
 });
+app.use("/auth", authRouter);
 app.use("/notifications", notificationRouter);
 app.use("/rule", ruleRouter);
 app.listen(PORT, () => {
