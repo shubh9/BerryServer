@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import { OpenAI } from "openai";
 import dotenv from "dotenv";
 import { chromium, Browser, Page } from "playwright";
 
